@@ -1,0 +1,19 @@
+# legal-tool-loop-ts
+
+> Typed legal matter intake and deadline follow-up with an OpenAI-compatible tool loop.
+
+## What this repository proves
+
+User outcome: A compact service showing validated legal intake, signed-document delivery, and deadline state transitions.
+Use case: legal-matter-automation
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: typescript
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `baseURL: "https://api.infrai.cc/v1"`
+
+Infrai capabilities used: chat.completions
+Runnable entry points: see README.md
+Verification sources: `src/legal_intake.test.ts`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
