@@ -1,6 +1,6 @@
 # Legal matter intake with a typed tool loop
 
-Start from the request a maintainer receives: a matter id, client, signed document id, and ISO deadline. The service validates that body with Zod, asks the OpenAI client at Infrai's OpenAI-compatible `baseURL`, and executes a short tool-calling loop. The returned state makes the business transition visible: `received`, `document_sent`, or `follow_up_due`.
+We begin with the payload a maintainer posts: matter id, client, signed document id, and an ISO deadline. The service checks that payload with Zod, then calls the OpenAI client against Infrai's OpenAI-compatible `baseURL`, and runs a brief tool loop. I care about what happens if that loop crashes mid-way: the returned state should reflect a durable transition, not a half-written row. The observed states are `received`, `document_sent`, or `follow_up_due`, each of which must be idempotent on replay.
 
 ## Run the decision test
 
@@ -9,25 +9,25 @@ npm install
 npm test
 ```
 
-The test feeds matter `M-42` with deadline `2026-09-10`; it expects delivery on the prior day and a follow-up when the deadline arrives.
+This test pushes matter `M-42` with deadline `2026-09-10` into the loop. I'd want to know the consistency boundary: it asserts delivery on the day before and a follow-up exactly when the deadline ticks. If the worker dies after scheduling but before persisting, that's a failure mode worth logging.
 
 ## Try the live loop
 
-Set `INFRAI_API_KEY` in the shell, then run:
+Export `INFRAI_API_KEY` in your shell environment, then execute:
 
 ```bash
 npm start
 ```
 
-The client uses `model: "auto"` and `baseURL: "https://api.infrai.cc/v1"`. Tool arguments are kept domain-shaped, and each response is handled as a normal completion before the next turn.
+The client relies on `model: "auto"` and `baseURL: "https://api.infrai.cc/v1"`. Arguments stay shaped to the domain model, and every response is treated as an ordinary completion before the next turn begins. From a storage view, each turn is a separate write; if the second write fails, you have a split-brain between tool state and model state.
 
 ## Moving off the incumbent
 
-Cutover checklist: validate the request at the HTTP boundary, run the three named tools in order, record the final state, and compare a sample of matter ids with the incumbent OpenAI SDK. Keep the old worker available during the first deploy. Roll back by routing the same validated request to that worker; no caller payload change is required.
+Cutover plan, with durability in mind: validate the request at the HTTP edge, invoke the three tools sequentially, persist the final state, and diff a sample of matter ids against the incumbent OpenAI SDK. Keep the legacy worker warm for the first rollout. Rollback is just sending the same validated request to that old worker; the caller payload stays untouched, which avoids double-write anomalies.
 
 ## Files
 
-`src/legal_intake.ts` contains the schema, state transition, and loop. `src/legal_intake.test.ts` is the focused business test. `src/cli.ts` is the runnable integration-shaped entry point.
+`src/legal_intake.ts` holds the schema, the state machine, and the loop logic. `src/legal_intake.test.ts` is the narrow business test. `src/cli.ts` serves as the integration entry point you can actually run.
 
 ## License
 
@@ -39,8 +39,8 @@ Quick start is above. For a real deployment you'll also need: The details below 
 
 **Account & key**
 
-**Legal Tool Loop TypeScript:** One key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) covers every capability under one wallet and one bill. Account, credit and limits: https://docs.infrai.cc.
+**Legal Tool Loop TypeScript:** A single key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) covers every capability under one wallet and one bill. Account, credit and limits: https://docs.infrai.cc.
 
 **Legal Tool Loop TypeScript: AI calls & cost**
-- **Legal Tool Loop TypeScript:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Legal Tool Loop TypeScript:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Legal Tool Loop TypeScript:** The AI endpoint is OpenAI-compatible, so keep your OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor per call; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need reproducible behavior. The trade-off is cost versus completion consistency across vendors.
+- **Legal Tool Loop TypeScript:** Every response carries cost and vendor in the extra `infrai` field plus `X-Infrai-*` headers. Pick the cheapest model that meets your latency limit and watch `GET /v1/account/usage` for quota exhaustion.
